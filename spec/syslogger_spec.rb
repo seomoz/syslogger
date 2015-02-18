@@ -3,9 +3,51 @@ require File.expand_path(File.dirname(__FILE__) + '/spec_helper')
 describe "Syslogger" do
 
   expected_info_level = Syslog::LOG_NOTICE
+  test_formatter = Proc.new { |severity, time, progname, message| message }
+
+  describe "formatter" do
+    before(:each) do
+      @logger = Syslogger.new("my_app", Syslog::LOG_PID | Syslog::LOG_CONS, nil)
+    end
+
+    it 'is applied when set' do
+      @logger.formatter = Proc.new { 'success' }
+      expect(Syslog).to receive(:open).and_yield(syslog=double('syslog', :mask= => true))
+
+      expect(syslog).to receive(:log).with(Syslog::LOG_WARNING, 'success')
+
+      @logger.warn('test message')
+    end
+
+    it 'can be read back' do
+      @logger.formatter = test_formatter
+
+      expect(@logger.formatter).to be(test_formatter)
+    end
+
+    it 'is applied to the message, all params passed' do
+      expect(Syslog).to receive(:open).and_yield(syslog=double('syslog', :mask= => true))
+      expect(syslog).to receive(:log)
+      args = nil
+      @logger.formatter  = Proc.new { |severity, time, progname, message|
+        args = { severity: severity, time: time, progname: progname, message: message }
+      }
+      @logger.ident = 'my-prog'
+
+      before = Time.now
+      @logger.warn('my-message')
+      after = Time.now
+
+      expect(args[:severity]).to eq('WARN')
+      expect(args[:time]).to (be >= before).and(be <= after)
+      expect(args[:progname]).to eq('my-prog')
+      expect(args[:message]).to eq('my-message')
+    end
+  end
 
   it "should log to the default syslog facility, with the default options" do
     logger = Syslogger.new
+    logger.formatter = test_formatter
     expect(Syslog).to receive(:open).with($0, Syslog::LOG_PID | Syslog::LOG_CONS, nil).
         and_yield(syslog=double("syslog", :mask= => true))
     expect(syslog).to receive(:log).with(Syslog::LOG_WARNING, "Some message")
@@ -14,6 +56,7 @@ describe "Syslogger" do
 
   it "should log to the user facility, with specific options" do
     logger = Syslogger.new("my_app", Syslog::LOG_PID, Syslog::LOG_USER)
+    logger.formatter = test_formatter
     expect(Syslog).to receive(:open).with("my_app", Syslog::LOG_PID, Syslog::LOG_USER).
         and_yield(syslog=double("syslog", :mask= => true))
     expect(syslog).to receive(:log).with(Syslog::LOG_WARNING, "Some message")
@@ -27,6 +70,7 @@ describe "Syslogger" do
 
     it "should log #{logger_method} without raising an exception if called with a block" do
       logger = Syslogger.new
+      logger.formatter = test_formatter
       logger.level = Logger.const_get(logger_method.upcase)
       expect(Syslog).to receive(:open).and_yield(syslog=double("syslog", :mask= => true))
       severity = Syslogger::MAPPING[Logger.const_get(logger_method.upcase)]
@@ -84,6 +128,7 @@ describe "Syslogger" do
 
   it "should respond to <<" do
     logger = Syslogger.new("my_app", Syslog::LOG_PID, Syslog::LOG_USER)
+    logger.formatter = test_formatter
     expect(logger).to respond_to(:<<)
     expect(Syslog).to receive(:open).with("my_app", Syslog::LOG_PID, Syslog::LOG_USER).
         and_yield(syslog=double("syslog", :mask= => true))
@@ -93,6 +138,7 @@ describe "Syslogger" do
 
   it "should respond to write" do
     logger = Syslogger.new("my_app", Syslog::LOG_PID, Syslog::LOG_USER)
+    logger.formatter = test_formatter
     expect(logger).to respond_to(:write)
     expect(Syslog).to receive(:open).with("my_app", Syslog::LOG_PID, Syslog::LOG_USER).
         and_yield(syslog=double("syslog", :mask= => true))
@@ -103,6 +149,7 @@ describe "Syslogger" do
   describe "add" do
     before do
       @logger = Syslogger.new("my_app", Syslog::LOG_PID, Syslog::LOG_USER)
+      @logger.formatter = test_formatter
     end
 
     it "should respond to add" do

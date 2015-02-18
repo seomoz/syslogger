@@ -88,10 +88,11 @@ class Syslogger
     end
     progname ||= @ident
 
+    message ||= block && block.call
+    communication = clean(formatter.call(format_severity(severity), Time.now, progname, message))
     @mutex.synchronize do
       Syslog.open(progname, @options, @facility) do |s|
         s.mask = Syslog::LOG_UPTO(MAPPING[@level])
-        communication = clean(message || block && block.call)
         if self.max_octets
           buffer = "#{tags_text}"
           communication.bytes do |byte|
@@ -155,6 +156,14 @@ class Syslogger
   end
 
   protected
+
+  # stolen from ruby/logger -- formatter expects string representation of severity
+  # Severity label for logging (max 5 chars).
+  SEV_LABEL = %w(DEBUG INFO WARN ERROR FATAL ANY)
+
+  def format_severity(severity)
+    SEV_LABEL[severity] || 'ANY'
+  end
 
   # Borrowed from SyslogLogger.
   def clean(message)
