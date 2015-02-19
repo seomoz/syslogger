@@ -18,6 +18,15 @@ class Syslogger
     Logger::UNKNOWN => Syslog::LOG_ALERT
   }
 
+  # Severity label for logging (max 5 chars).
+  SEVERITY_LABEL = {
+    Logger::DEBUG => 'DEBUG',
+    Logger::INFO => 'INFO',
+    Logger::WARN => 'WARN',
+    Logger::ERROR => 'ERROR',
+    Logger::FATAL => 'FATAL',
+  }
+
   #
   # Initializes default options for the logger
   # <tt>ident</tt>:: the name of your program [default=$0].
@@ -88,10 +97,15 @@ class Syslogger
     end
     progname ||= @ident
 
+    communication = clean(formatter.call(
+        SEVERITY_LABEL.fetch(severity, 'ANY'),
+        Time.now,
+        progname,
+        message || (block && block.call)
+    ))
     @mutex.synchronize do
       Syslog.open(progname, @options, @facility) do |s|
         s.mask = Syslog::LOG_UPTO(MAPPING[@level])
-        communication = clean(message || block && block.call)
         if self.max_octets
           buffer = "#{tags_text}"
           communication.bytes do |byte|
