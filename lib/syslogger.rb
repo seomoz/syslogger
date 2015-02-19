@@ -18,6 +18,15 @@ class Syslogger
     Logger::UNKNOWN => Syslog::LOG_ALERT
   }
 
+  # Severity label for logging (max 5 chars).
+  SEVERITY_LABEL = {
+    Logger::DEBUG => 'DEBUG',
+    Logger::INFO => 'INFO',
+    Logger::WARN => 'WARN',
+    Logger::ERROR => 'ERROR',
+    Logger::FATAL => 'FATAL',
+  }
+
   #
   # Initializes default options for the logger
   # <tt>ident</tt>:: the name of your program [default=$0].
@@ -88,8 +97,12 @@ class Syslogger
     end
     progname ||= @ident
 
-    message ||= block && block.call
-    communication = clean(formatter.call(format_severity(severity), Time.now, progname, message))
+    communication = clean(formatter.call(
+        SEVERITY_LABEL.fetch(severity, 'ANY'),
+        Time.now,
+        progname,
+        message || (block && block.call)
+    ))
     @mutex.synchronize do
       Syslog.open(progname, @options, @facility) do |s|
         s.mask = Syslog::LOG_UPTO(MAPPING[@level])
@@ -156,14 +169,6 @@ class Syslogger
   end
 
   protected
-
-  # stolen from ruby/logger -- formatter expects string representation of severity
-  # Severity label for logging (max 5 chars).
-  SEV_LABEL = %w(DEBUG INFO WARN ERROR FATAL ANY)
-
-  def format_severity(severity)
-    SEV_LABEL[severity] || 'ANY'
-  end
 
   # Borrowed from SyslogLogger.
   def clean(message)

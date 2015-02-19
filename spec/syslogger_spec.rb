@@ -38,10 +38,12 @@ describe "Syslogger" do
       @logger.warn('my-message')
       after = Time.now
 
-      expect(args[:severity]).to eq('WARN')
-      expect(args[:time]).to (be >= before).and(be <= after)
-      expect(args[:progname]).to eq('my-prog')
-      expect(args[:message]).to eq('my-message')
+      expect(args).to include(
+        severity: 'WARN',
+        time: a_value_between(before, after),
+        progname: 'my-prog',
+        message: 'my-message'
+      )
     end
   end
 
